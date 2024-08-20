@@ -1,42 +1,73 @@
 import PySimpleGUI as sg
 from PIL import Image
-import pathlib
+import io
+import os
 
-from PySimpleGUI import popup
+image_atual = None
+image_path = None
 
-
-def convert_image(input_file_path, output_file_path):
-    img = Image.open(input_file_path)
-    img.save(output_file_path)
-    original_suffix = pathlib.Path(input_file_path).suffix
-    new_suffix = pathlib.Path(output_file_path).suffix
+def resize_image(img):
+    img = img.resize((800, 600), Image.Resampling.LANCZOS) 
     return img
 
-if __name__ == "__main__":
-    # ------ Menu Definition ------ #
-    menu_def = [['&File', ['&Open', '&Save', '---', 'Properties', 'E&xit'  ]],
-                ['&Edit', ['Paste', ['Special', 'Normal',], 'Undo'],],
-                ['&Help', ['&About...']]]
+def open_image(filename):
+    global image_atual
+    global image_path
+    image_path = filename
+    image_atual = Image.open(filename)    
+    
+    resized_img = resize_image(image_atual)
+    #Converte a image PIL para o formato que o PySimpleGUI
+    img_bytes = io.BytesIO() #Permite criar objetos semelhantes a arquivos na memória RAM
+    resized_img.save(img_bytes, format='PNG')
+    window['-IMAGE-'].update(data=img_bytes.getvalue())
 
-    # All the stuff inside your window.
-    layout = [  [sg.Menu(menu_def)],
-                [sg.Image(key="-IMAGE-")] ]
+def save_image(filename):
+    global image_path
+    if image_path:
+        image_atual = Image.open(image_path)
+        with open(filename, 'wb') as file:
+            image_atual.save(file)
 
-    # Create the Window
-    window = sg.Window('Hello Example', layout, resizable=True)
+def info_image():
+    global image_atual
+    global image_path
+    if image_atual:
+        largura, altura = image_atual.size
+        formato = image_atual.format
+        tamanho_bytes = os.path.getsize(image_path)
+        tamanho_mb = tamanho_bytes / (1024 * 1024)
+        sg.popup(f"Tamanho: {largura} x {altura}\nFormato: {formato}\nTamanho em MB: {tamanho_mb:.2f}")
 
-    # Event Loop to process "events" and get the "values" of the inputs
-    while True:
-        event, values = window.read()
+layout = [
+    [sg.Menu([
+            ['Arquivo', ['Abrir', 'Salvar', 'Fechar']],
+            ['Sobre a image', ['Informacoes']], 
+            ['Sobre', ['Desenvolvedor']]
+        ])],
+    [sg.Image(key='-IMAGE-', size=(800, 600))],
+]
 
-        # if user closes window
-        if event == sg.WIN_CLOSED:
-            break
-        elif event == "Open":
-            image = sg.popup_get_file("", no_window=True)
-            converted_image = convert_image(image)
-            window["-IMAGE-"].update(data=converted_image)
+window = sg.Window('Aplicativo de image', layout, finalize=True)
 
-        print('Hello', values[0], '!')
+while True:
+    event, values = window.read()
 
-    window.close()
+    if event in (sg.WINDOW_CLOSED, 'Fechar'):
+        break
+    elif event == 'Abrir':
+        arquivo = sg.popup_get_file('Selecionar image', file_types=(("Imagens", "*.png;*.jpg;*.jpeg;*.gif"),))
+        if arquivo:
+            open_image(arquivo)
+    elif event == 'Salvar':
+        if image_atual:
+            arquivo = sg.popup_get_file('Salvar image como', save_as=True, file_types=(("Imagens", "*.png;*.jpg;*.jpeg;*.gif"),))
+            if arquivo:
+                save_image(arquivo)
+    elif event == 'Informacoes':
+        info_image()
+    elif event == 'Desenvolvedor':
+        sg.popup('Desenvolvido por [Seu Nome] - BCC 6º Semestre')
+
+
+window. Close()
