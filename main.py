@@ -23,9 +23,8 @@ def open_image(filename):
     window['-IMAGE-'].update(data=img_bytes.getvalue())
 
 def save_image(filename):
-    global image_path
-    if image_path:
-        image_atual = Image.open(image_path)
+    global image_atual
+    if image_atual:
         with open(filename, 'wb') as file:
             image_atual.save(file)
 
