@@ -3,18 +3,33 @@ from PIL import Image, ExifTags, ImageFilter
 from PIL.TiffTags import TAGS
 import io
 import webbrowser
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import os
-import requests
+# import requests
 
 image_atual = None
 image_path = None
 max_width = 800
 max_height = 600
 previous_state = None
+start_x = 0
+start_y = 0
+end_x = 0 
+end_y = 0
+selecting = False
+width_reduction = 0
+height_reduction = 0
+new_width = 0
+new_height = 0
 
 def resize_image(img):
     global max_width
     global max_height
+    global width_reduction
+    global height_reduction
+    global new_width
+    global new_height
 
     try:
         width, height = img.size
@@ -27,7 +42,18 @@ def resize_image(img):
         new_height = max_height
         new_width = int(max_height * aspect_ratio)
         img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
-    
+
+        width_reduction = width/new_width
+        height_reduction = height/new_height
+        
+        print(f"WIDHT REAL: {width}")
+        print(f"HEIGHT REAL: {height}")
+        print(f"WIDHT NOVO: {new_width}")
+        print(f"HEIGHT NOVO: {new_height}")
+
+        print(f"WIDTH REDUCTION: {width_reduction}")
+        print(f"HEIGHT REDUCTION: {height_reduction}")
+
         return img
     except Exception as e:
         print(f"ERRO ao rendimencionar a imagem: {str(e)}") 
@@ -35,16 +61,16 @@ def resize_image(img):
 def url_download(url):
     global image_atual
     global previous_state
-    try:
-        r = requests.get(url, stream=True)
-        if r.status_code == 200:
-            previous_state = image_atual.copy()
-            image_atual = Image.open(io.BytesIO(r.content))
-            show_image()
-        else:
-            sg.popup("Falha ao baixar a imagem. Verifique a URL e tente novamente.")
-    except Exception as e:
-        sg.popup(f"Erro ao baixar a imagem: {str(e)}")
+    # try:
+    #     #r = requests.get(url, stream=True)
+    #     if r.status_code == 200:
+    #         previous_state = image_atual.copy()
+    #         image_atual = Image.open(io.BytesIO(r.content))
+    #         show_image()
+    #     else:
+    #         sg.popup("Falha ao baixar a imagem. Verifique a URL e tente novamente.")
+    # except Exception as e:
+    #     sg.popup(f"Erro ao baixar a imagem: {str(e)}")
 
 def open_image(filename):
     global image_atual
@@ -54,13 +80,25 @@ def open_image(filename):
     image_atual = Image.open(filename)   
     
     #Converte a image PIL para o formato que o PySimpleGUI
-    show_image(image_atual)
+    show_image()
 
-def show_image(img):
-    resized_img = resize_image(img)
-    img_bytes = io.BytesIO() #Permite criar objetos semelhantes a arquivos na memória RAM
-    resized_img.save(img_bytes, format='PNG')
-    window['-IMAGE-'].update(data=img_bytes.getvalue())
+def show_image():
+    global image_atual
+    try:
+        resized_img = resize_image(image_atual)
+        #Converte a image PIL para o formato que o PySimpleGUI
+        img_bytes = io.BytesIO() #Permite criar objetos semelhantes a arquivos na memÃ³ria RAM
+        resized_img.save(img_bytes, format='PNG')
+        window['-IMAGE-'].draw_image(data=img_bytes.getvalue(), location=(0,400))
+    except Exception as e:
+        sg.popup(f"Erro ao exibir a imagem: {str(e)}")
+
+
+# def show_image(img):
+#     resized_img = resize_image(img)
+#     img_bytes = io.BytesIO() #Permite criar objetos semelhantes a arquivos na memória RAM
+#     resized_img.save(img_bytes, format='PNG')
+#     window['-IMAGE-'].update(data=img_bytes.getvalue())
 
 def apply_grayScale_filter():
     global image_atual
@@ -359,6 +397,30 @@ def info_image_property():
     valor += webbrowser.open(f"\nhttps://www.google.com.br/maps/place/{gps_values[0]},{gps_values[1]}")
     sg.popup(valor)
 
+def calculate_histogram(image):
+    if image.mode != 'L':
+        image = image.convert('L')
+    histogram = image.histogram()
+    
+    return histogram
+
+def show_histogram(image):
+    histogram = calculate_histogram(image)
+    
+    layout = [
+        [sg.Canvas(key='-CANVAS-')],
+        [sg.Button('Fechar')]
+    ]
+    
+    window = sg.Window('Histograma', layout, finalize=True)
+    
+    fig, ax = plt.subplots()
+    ax.hist(range(256), bins=256, weights=histogram)
+    
+    canvas_elem = window['-CANVAS-']
+    canvas = FigureCanvasTkAgg(fig, canvas_elem.Widget)
+    canvas.get_tk_widget().pack(side='top', fill='both', expand=1)
+
 def get_gps_information(valor):
     directionLat = valor[1]
     coordinatesLat = valor[2]
@@ -379,7 +441,38 @@ def get_gps_information(valor):
         sumLong *= 1   
 
     return [sumLat, sumLong]
-                
+
+def crop_selected_area():
+    global start_x, start_y
+    global end_x, end_y
+    global width_reduction
+    global height_reduction
+    global image_atual
+    global new_width
+
+    print(start_x)
+    print(start_y)
+    print(end_x)
+    print(end_y)    
+
+    x1 = start_x * new_width
+    print(x1)
+
+    x1_real_image = int(start_x * width_reduction)
+    x2_real_image = int(end_x * width_reduction)
+    y1_real_image = int(start_y * height_reduction)
+    y2_real_image = int(end_y * height_reduction)
+
+    print(f"X1: {x1_real_image} - X2: {x2_real_image} --- Y1: {y1_real_image} - Y2: {y2_real_image}")       
+
+    if x1_real_image > x2_real_image:
+        x1_real_image, x2_real_image = x2_real_image, x1_real_image
+
+    if y1_real_image > y2_real_image:
+        y1_real_image, y2_real_image = y2_real_image, y1_real_image
+
+    image_atual = image_atual.crop((x1_real_image, y1_real_image, x2_real_image, y2_real_image))     
+    show_image()
 
 layout = [
     [sg.Menu([
@@ -396,7 +489,7 @@ layout = [
             ['Sobre a image', ['Informacoes']], 
             ['Sobre', ['Desenvolvedor']]
         ])],
-    [sg.Image(key='-IMAGE-', size=(800, 600))],
+    [sg.Graph(key='-IMAGE-', canvas_size=(800, 600), change_submits=True, drag_submits=True, graph_bottom_left=(0,0), graph_top_right=(400, 400))],
 ]
 
 window = sg.Window('Photo Shoping', layout, finalize=True)
@@ -424,19 +517,20 @@ while True:
     elif event == 'Informacoes':
         info_image()
     elif event == 'Mostrar dados da imagem':
-        exif_data()
+        info_image_property()
     elif event == 'Mostrar dados de GPS':
-        gps_data()
+        print("Dados de GPS")
+        # gps_data()
     elif event == 'Girar 90 graus à direita':
         rotate_image(-90)
     elif event == 'Girar 90 graus à esquerda':
         rotate_image(90)
     elif event == 'Preto e Branco':
-        apply_grayscale_filter()
+        apply_grayScale_filter()
     elif event == 'Sépia':
         apply_sepia_filter()
     elif event == 'Negativo':
-        apply_negative_filter()
+        apply_inversion_filter()
     elif event == '4 bits':
         apply_four_bits_filter()
     elif event == 'Blur':
@@ -461,5 +555,16 @@ while True:
         apply_maxfilter_filter()
     elif event == 'Desenvolvedor':
         sg.popup('Desenvolvido por Erick - BCC 6º Semestre')
+    elif event.startswith('-IMAGE-'):
+        if '-IMAGE-' in values and values['-IMAGE-'] is not None:
+            if event.endswith('-IMAGE-+UP'):
+                selecting = False
+                end_x, end_y = values['-IMAGE-']
+                end_y = 400 - end_y
+                crop_selected_area()
+            elif not selecting:
+                selecting = True
+                start_x, start_y = values['-IMAGE-']
+                start_y = 400 - start_y
 
 window.close()
